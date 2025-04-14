@@ -6,17 +6,20 @@ from ai_test import connect_mcp, get_response, check_tool
 initialed = False
 messages = None
 
+MCP_ENABLED = False
+
 
 async def load():
     global initialed, messages
     if initialed is not True:
         initialed = True
-        messages = await connect_mcp()
+        if MCP_ENABLED:
+            messages = await connect_mcp()
 
 
 async def chat(message, history, v):
 
-    if len(history) == 0:
+    if len(history) == 0 and messages != None:
         for content in messages:
             history.append(content)
 
