@@ -2,6 +2,7 @@ from mcp import ClientSession, types
 from mcp.client.sse import sse_client
 from contextlib import AsyncExitStack
 
+
 url = "http://localhost:8000/sse"
 
 
@@ -24,3 +25,13 @@ class CustomMCPClient:
 
     async def close(self):
         await self.exit_stack.aclose()
+
+async def test():
+    client = CustomMCPClient()
+    await client.connect_to_server()
+    print(await client.get_tools())
+    await client.close()
+    
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(test())

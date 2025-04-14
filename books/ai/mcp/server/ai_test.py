@@ -27,7 +27,6 @@ custom_tools = None
 
 
 client = OpenAI(
-    # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
     api_key=os.getenv("DASHSCOPE_API_KEY"),
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
@@ -75,7 +74,7 @@ async def connect_mcp():
     await connect()
     tools = await get_tools()
     prompt = english_prompt.replace('{{tool_lists}}', tools)
-    # 初始化一个 messages 数组
+
     messages = [
         {
             "role": "system",
@@ -83,55 +82,6 @@ async def connect_mcp():
         }
     ]
     return messages
-
-
-async def run():
-    await connect()
-    tools = await get_tools()
-    prompt = english_prompt.replace('{{tool_lists}}', tools)
-
-    # 初始化一个 messages 数组
-    messages = [
-        {
-            "role": "system",
-            "content": prompt
-        }
-    ]
-
-    messages.append(
-        {
-            "role": "user",
-            "content": "user question: list the name of my most starts repo in github"
-        }
-    )
-
-    assistant_output = get_response(messages).choices[0].message.content
-    # 将大模型的回复信息添加到messages列表中
-    messages.append({"role": "assistant", "content": assistant_output})
-    print(f"模型输出：{assistant_output}")
-
-    # execute if there is mcp tool call
-    await check_tool(assistant_output, messages)
-
-    assistant_output = get_response(messages).choices[0].message.content
-    print(f"模型输出：{assistant_output}")
-
-    # try ask another
-    messages.append(
-        {
-            "role": "user",
-            "content": "user question: check if good to go to the city guangzhou"
-        }
-    )
-    assistant_output = get_response(messages).choices[0].message.content
-    print(f"模型输出：{assistant_output}")
-
-    await check_tool(assistant_output, messages)
-    assistant_output = get_response(messages).choices[0].message.content
-    print(f"模型输出：{assistant_output}")
-
-    await github_client.close()
-    await custom_client.close()
 
 
 def get_response(messages):
