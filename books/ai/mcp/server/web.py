@@ -5,16 +5,14 @@ from ai_test import connect_mcp, get_response, check_tool
 
 initialed = False
 messages = None
-
-MCP_ENABLED = False
+tool_messages = None
 
 
 async def load():
-    global initialed, messages
+    global initialed, tool_messages, messages
     if initialed is not True:
         initialed = True
-        if MCP_ENABLED:
-            messages = await connect_mcp()
+        tool_messages = await connect_mcp()
 
 
 async def chat(message, history, v):
@@ -43,8 +41,18 @@ async def chat(message, history, v):
 
 
 with gr.Blocks() as demo:
+    def on_check(f):
+        global messages
+        if f:
+            messages = tool_messages
+        else:
+            messages = None
+
     demo.load(load, inputs=[])
     code = gr.Markdown(render=False)
+    check = gr.Checkbox(render=False, label="use mcp")
+    with gr.Row():
+        check.render()
     with gr.Row():
         with gr.Column():
             gr.ChatInterface(
@@ -53,6 +61,6 @@ with gr.Blocks() as demo:
                 additional_outputs=[code],
                 type="messages"
             )
-
+    check.change(on_check, inputs=[check])
 
 demo.launch()

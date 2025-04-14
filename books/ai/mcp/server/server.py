@@ -3,16 +3,28 @@ from starlette.applications import Starlette
 from starlette.routing import Mount, Host
 from mcp.server.fastmcp import FastMCP
 import uvicorn
+from gnews import GNews
 
 # Create an MCP server
 mcp = FastMCP("Demo")
-
+google_news = GNews(max_results=10)
 
 # Add an addition tool
+
+
 @mcp.tool()
 def get_weather(city: str) -> int:
     """get the weather of the city"""
     return "cloudy"
+
+# Add an addition tool
+
+
+@mcp.tool()
+def search_google(search: str):
+    """search information in web, and return relative news in full text, you need to analysis and give summary to user"""
+    news = google_news.get_news(search)
+    return news
 
 
 @mcp.prompt()

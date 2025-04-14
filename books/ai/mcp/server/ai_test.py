@@ -65,6 +65,7 @@ async def check_tool(content: str, messages: list):
             return True
 
     except Exception as ex:
+        print(ex)
         return False
     
     return False

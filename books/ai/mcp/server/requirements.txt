@@ -3,3 +3,4 @@ httpx
 starlette
 uvicorn
 openai
+gnews
