@@ -1,6 +1,6 @@
 import gradio as gr
 import asyncio
-from ai_test import connect_mcp, get_response, check_tool
+from agent import connect_mcp, get_response, check_tool
 
 
 initialed = False

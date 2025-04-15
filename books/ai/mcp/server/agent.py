@@ -3,7 +3,8 @@ import asyncio
 import json
 from clients.client import CustomMCPClient
 from clients.github import GitHubMCPClient
-from openai import OpenAI
+from openai import AzureOpenAI
+import openai
 from dotenv import load_dotenv
 load_dotenv()  # load environment variables from .env
 
@@ -26,9 +27,10 @@ github_tools = None
 custom_tools = None
 
 
-client = OpenAI(
-    api_key=os.getenv("DASHSCOPE_API_KEY"),
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+client = AzureOpenAI(
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    api_version="2024-05-01-preview",
+    azure_endpoint="https://trish-m9gy5pk8-eastus2.cognitiveservices.azure.com",
 )
 
 
@@ -66,7 +68,7 @@ async def check_tool(content: str, messages: list):
     except Exception as ex:
         print(ex)
         return False
-    
+
     return False
 
 
@@ -85,7 +87,5 @@ async def connect_mcp():
 
 
 def get_response(messages):
-
-    # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
-    completion = client.chat.completions.create(model="qwen-plus", messages=messages)
+    completion = client.chat.completions.create(model="gpt-4.5-preview", messages=messages)
     return completion
