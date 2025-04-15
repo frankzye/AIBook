@@ -30,7 +30,7 @@ custom_tools = None
 client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     api_version="2024-05-01-preview",
-    azure_endpoint="https://trish-m9gy5pk8-eastus2.cognitiveservices.azure.com",
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
 )
 
 
