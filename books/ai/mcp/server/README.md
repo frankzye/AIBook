@@ -37,3 +37,33 @@ https://github.com/github/github-mcp-server
 1. use gradio app create a simple chat
 2. provide the option enable mcp
 3. import agent and handle LLM chat response
+
+
+## start the demo
+1. create venv 
+```
+python3 -m venv venv
+source venv/bin/activate
+```
+
+2. install requirements
+```
+pip install -r requirements
+```
+
+3. create .env
+```
+GITHUB_TOKEN=
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_ENDPOINT=
+```
+
+3. start the mcp server
+```
+python server.py
+```
+
+4. start the chat ui app
+```
+python web.py
+```
