@@ -1,11 +1,20 @@
 import gradio as gr
-import asyncio
+import logging
 from agent import connect_mcp, get_response, check_tool
 
 
 initialed = False
 messages = None
 tool_messages = None
+
+# config logging and provide console output
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 
 
 async def load():
@@ -24,18 +33,17 @@ async def chat(message, history, v):
     chat_messages = []
     for content in history:
         chat_messages.append(content)
+
     chat_messages.append({
         "role": "user",
         "content": "user question: "+message
     })
-
+    
     md = None
-    api_request_content = get_response(chat_messages).choices[0].message.content
-    if await check_tool(api_request_content, chat_messages):
-        assistant_output = get_response(chat_messages).choices[0].message.content
-        md = gr.Markdown(value=(v+"   \n"+api_request_content))
-    else:
-        assistant_output = api_request_content
+
+    assistant_output, api_call = await get_response(chat_messages)
+    if api_call and v is not None:
+        md = gr.Markdown(value=(v+"   \n"+api_call))
 
     return assistant_output, md
 

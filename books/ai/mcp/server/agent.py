@@ -3,8 +3,8 @@ import asyncio
 import json
 from clients.client import CustomMCPClient
 from clients.github import GitHubMCPClient
-from openai import AzureOpenAI
-import openai
+from openai import OpenAI
+import logging
 from dotenv import load_dotenv
 load_dotenv()  # load environment variables from .env
 
@@ -27,10 +27,9 @@ github_tools = None
 custom_tools = None
 
 
-client = AzureOpenAI(
+client = OpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version="2024-05-01-preview",
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    base_url=os.getenv("AZURE_OPENAI_ENDPOINT"),
 )
 
 
@@ -51,27 +50,7 @@ async def get_tools():
     return str(github_tools.tools)+'\n'+str(custom_tools.tools)
 
 
-async def check_tool(content: str, messages: list):
-    try:
-        mcp_tool = json.loads(content)
-
-        if mcp_tool.get("name") in [t.name for t in github_tools.tools]:
-            res = await github_client.call_tool(mcp_tool.get("name"), mcp_tool.get("args"))
-            messages.append({"role": "user", "content": "the response of api:" + str(res)})
-            return True
-
-        if mcp_tool.get("name") in [t.name for t in custom_tools.tools]:
-            res = await custom_client.call_tool(mcp_tool.get("name"), mcp_tool.get("args"))
-            messages.append({"role": "user", "content": "the response of api:" + str(res)})
-            return True
-
-    except Exception as ex:
-        print(ex)
-        return False
-
-    return False
-
-
+# connect mcp servers, list the tools, and create the system prompt
 async def connect_mcp():
     await connect()
     tools = await get_tools()
@@ -86,6 +65,42 @@ async def connect_mcp():
     return messages
 
 
-def get_response(messages):
-    completion = client.chat.completions.create(model="gpt-4.5-preview", messages=messages)
-    return completion
+# call the llm and send the messages
+async def get_response(messages):
+    completion = client.chat.completions.create(
+        model="qwen-max",
+        messages=messages,
+        temperature=0)
+    content = completion.choices[0].message.content
+    
+    api_call = None
+
+    if await check_tool(content, messages):
+        api_call = content
+        logging.info("call mcp tool completed, and wait for the LLM response")
+        content, _ = await get_response(messages)
+
+    return content, api_call
+
+# check the return of message if json format, and is mcp tool call, and yes,
+# use mcp client execute the call and return the chat message, and append to chat messages
+async def check_tool(content: str, messages: list):
+    try:
+        if content.startswith('```json'):
+            content = content.replace('```json', '').replace('```', '')
+        mcp_tool = json.loads(content)
+
+        if mcp_tool.get("name") in [t.name for t in github_tools.tools]:
+            res = await github_client.call_tool(mcp_tool.get("name"), mcp_tool.get("args"))
+            messages.append({"role": "user", "content": "the response of api:" + str(res)})
+            return True
+
+        if mcp_tool.get("name") in [t.name for t in custom_tools.tools]:
+            res = await custom_client.call_tool(mcp_tool.get("name"), mcp_tool.get("args"))
+            messages.append({"role": "user", "content": "the response of api:" + str(res)})
+            return True
+
+    except Exception as ex:
+        return False
+
+    return False
