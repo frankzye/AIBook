@@ -2,105 +2,85 @@ import os
 import asyncio
 import json
 from clients.client import CustomMCPClient
-from clients.github import GitHubMCPClient
 from openai import OpenAI
 import logging
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import List
+from agents import Agent, Runner
+from openai import AsyncOpenAI
+from agents import set_default_openai_client
+from agents.mcp import MCPServerSse, MCPServerStdio
+from agents.models import _openai_shared
+
 load_dotenv()  # load environment variables from .env
 
-# Load the English prompt file into a string
 
-
-def load_english_prompt():
-    prompt_path = os.path.join(os.path.dirname(__file__), 'english_prompt.md')
-    with open(prompt_path, 'r', encoding='utf-8') as file:
-        english_prompt = file.read()
-    return english_prompt
-
-
-# Load the prompt
-english_prompt = load_english_prompt()
-
-custom_client = None
-github_client = None
-github_tools = None
-custom_tools = None
-
-
-client = OpenAI(
+custom_client = AsyncOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     base_url=os.getenv("AZURE_OPENAI_ENDPOINT"),
 )
 
-
-async def connect():
-    global custom_client, github_client
-    custom_client = CustomMCPClient()
-    github_client = GitHubMCPClient()
-    await custom_client.connect_to_server()
-    await github_client.connect_to_server()
+_openai_shared.set_use_responses_by_default(False)
+set_default_openai_client(custom_client, use_for_tracing=False)
 
 
-async def get_tools():
-    global github_tools, custom_tools
-    github_tools = await github_client.get_tools()
-    custom_tools = await custom_client.get_tools()
-
-    # Merge custom_tools into github_tools
-    return str(github_tools.tools)+'\n'+str(custom_tools.tools)
+agent = None
 
 
-# connect mcp servers, list the tools, and create the system prompt
 async def connect_mcp():
-    await connect()
-    tools = await get_tools()
-    prompt = english_prompt.replace('{{tool_lists}}', tools)
-
-    messages = [
-        {
-            "role": "system",
-            "content": prompt
-        }
-    ]
-    return messages
+    server1 = MCPServerSse(
+        name="SSE Python Server",
+        client_session_timeout_seconds=300,
+        params={
+            "url": "http://localhost:8000/sse",
+        },
+    )
+    server2 = MCPServerStdio(name="github",
+                             params={
+                                 "command": "podman",
+                                 "args": ['run', '-i', '--rm', '-e', 'GITHUB_PERSONAL_ACCESS_TOKEN', 'ghcr.io/github/github-mcp-server'],
+                                 "env": {
+                                     "GITHUB_PERSONAL_ACCESS_TOKEN": os.environ.get("GITHUB_TOKEN")
+                                 }
+                             })
+    await server1.connect()
+    await server2.connect()
+    global agent
+    agent = Agent(name="Assistant", instructions="You are a helpful assistant", model="qwen-max", mcp_servers=[
+        server1, server2
+    ])
 
 
 # call the llm and send the messages
-async def get_response(messages):
-    completion = client.chat.completions.create(
-        model="qwen-max",
-        messages=messages,
-        temperature=0)
-    content = completion.choices[0].message.content
-    
-    api_call = None
+async def get_response(history, messages):
+    from openai.types.responses import ResponseTextDeltaEvent
 
-    if await check_tool(content, messages):
-        api_call = content
-        logging.info("call mcp tool completed, and wait for the LLM response")
-        content, _ = await get_response(messages)
-
-    return content, api_call
-
-# check the return of message if json format, and is mcp tool call, and yes,
-# use mcp client execute the call and return the chat message, and append to chat messages
-async def check_tool(content: str, messages: list):
     try:
-        if content.startswith('```json'):
-            content = content.replace('```json', '').replace('```', '')
-        mcp_tool = json.loads(content)
+        for h in history:
+            if h["role"] == "assistant":
+                h["content"] = [{
+                    "type": "output_text",
+                    "text": h["content"],
+                }]
+            h["type"] = "message"
 
-        if mcp_tool.get("name") in [t.name for t in github_tools.tools]:
-            res = await github_client.call_tool(mcp_tool.get("name"), mcp_tool.get("args"))
-            messages.append({"role": "user", "content": "the response of api:" + str(res)})
-            return True
+        api_call = None
+        result = Runner.run_streamed(agent, history + messages)
+        content = {
+            "type": "message",
+            "role": "assistant",
+            "content": ""
+        }
 
-        if mcp_tool.get("name") in [t.name for t in custom_tools.tools]:
-            res = await custom_client.call_tool(mcp_tool.get("name"), mcp_tool.get("args"))
-            messages.append({"role": "user", "content": "the response of api:" + str(res)})
-            return True
+        async for event in result.stream_events():
+            if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+                content["content"] += event.data.delta
+                yield content, api_call
+            elif event.type == "run_item_stream_event":
+                if event.item.type == "tool_call_item":
+                    api_call = event.item.raw_item.name + event.item.raw_item.arguments
+                    yield content, api_call
 
     except Exception as ex:
-        return False
-
-    return False
+        raise ex

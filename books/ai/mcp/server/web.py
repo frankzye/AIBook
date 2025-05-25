@@ -1,6 +1,6 @@
 import gradio as gr
 import logging
-from agent import connect_mcp, get_response, check_tool
+from agent import get_response, connect_mcp
 
 
 initialed = False
@@ -19,9 +19,7 @@ logging.basicConfig(
 
 async def load():
     global initialed, tool_messages, messages
-    if initialed is not True:
-        initialed = True
-        tool_messages = await connect_mcp()
+    await connect_mcp()
 
 
 async def chat(message, history, v):
@@ -31,21 +29,17 @@ async def chat(message, history, v):
             history.append(content)
 
     chat_messages = []
-    for content in history:
-        chat_messages.append(content)
-
     chat_messages.append({
         "role": "user",
-        "content": "user question: "+message
+        "content": message
     })
-    
+
     md = None
 
-    assistant_output, api_call = await get_response(chat_messages)
-    if api_call and v is not None:
-        md = gr.Markdown(value=(v+"   \n"+api_call))
-
-    return assistant_output, md
+    async for assistant_output, api_call in get_response(history, chat_messages):
+        if api_call and v is not None:
+            md = gr.Markdown(value=(v+"   \n"+api_call))
+        yield assistant_output, md
 
 
 with gr.Blocks() as demo:
@@ -55,10 +49,10 @@ with gr.Blocks() as demo:
             messages = tool_messages
         else:
             messages = None
-
     demo.load(load, inputs=[])
+
     code = gr.Markdown(render=False)
-    check = gr.Checkbox(render=False, label="use mcp")
+    check = gr.Checkbox(render=False, label="use mcp", value=True)
     with gr.Row():
         check.render()
     with gr.Row():

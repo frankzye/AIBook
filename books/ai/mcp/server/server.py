@@ -13,7 +13,7 @@ caches = {}
 
 
 @mcp.tool()
-def get_weather(city: str) -> int:
+def get_weather(city: str) -> str:
     """get the weather of the city"""
     return "cloudy"
 
@@ -21,8 +21,8 @@ def get_weather(city: str) -> int:
 
 
 @mcp.tool()
-def search_google(search: str):
-    """search information in web, and return relative news in full text, you need to analysis and give summary to user"""
+def search_news(search: str):
+    """search recent news, and return relative news in full text, you need to analysis and give summary to user"""
     if caches.get("str") is not None:
         logging.info("search with cache completed")
         return caches[str]
